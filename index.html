@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ゲーム戦績トラッカー</title>
+<title>gamblingvalorant</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:sans-serif;background:#f5f5f5;padding:1rem;}
-h2{font-size:18px;font-weight:500;margin-bottom:1.25rem;}
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
+.top-bar h2{font-size:18px;font-weight:500;}
 .top-bar span{font-size:13px;color:#888;}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem;}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:12px 14px;}
@@ -21,8 +21,6 @@ h2{font-size:18px;font-weight:500;margin-bottom:1.25rem;}
 .bl{flex:1;padding:6px 0;font-size:12px;background:#FAECE7;color:#993C1D;border:1px solid #F0997B;border-radius:8px;cursor:pointer;font-weight:500;}
 .tlabel{font-size:11px;color:#888;margin-top:7px;text-align:center;}
 .tamount{font-size:15px;font-weight:500;text-align:center;margin-top:2px;}
-.red{color:#993C1D;}
-.muted{color:#aaa;}
 .badge{display:inline-flex;align-items:center;font-size:11px;padding:2px 7px;border-radius:20px;}
 .bwin{background:#E1F5EE;color:#0F6E56;}
 .bloss{background:#FAECE7;color:#993C1D;}
@@ -40,20 +38,19 @@ h2{font-size:18px;font-weight:500;margin-bottom:1.25rem;}
 .modal-btns button{flex:1;padding:8px;font-size:14px;border-radius:8px;cursor:pointer;font-weight:500;}
 .modal-cancel{background:#f0f0f0;border:1px solid #ddd;color:#111;}
 .modal-ok{background:#FAECE7;border:1px solid #F0997B;color:#993C1D;}
-.status{font-size:12px;color:#888;text-align:center;margin-bottom:8px;}
 </style>
 </head>
 <body>
 
 <div class="top-bar">
-  <h2>ゲーム戦績トラッカー</h2>
+  <h2>gamblingvalorant</h2>
   <span id="status">接続中...</span>
 </div>
 
 <div class="grid" id="grid"></div>
 
 <div class="summary">
-  <div class="stitle">負け合計まとめ</div>
+  <div class="stitle">合計まとめ</div>
   <div id="summary-rows"></div>
   <hr class="divider">
   <div class="trow"><span>総合計</span><span id="grand-total">¥0</span></div>
@@ -65,7 +62,7 @@ h2{font-size:18px;font-weight:500;margin-bottom:1.25rem;}
 
 <div class="overlay" id="overlay">
   <div class="modal">
-    <p>全員の勝ち・負け・合計を<br>リセットします。よろしいですか？</p>
+    <p>全員のデータを<br>リセットします。よろしいですか？</p>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="document.getElementById('overlay').classList.remove('show')">キャンセル</button>
       <button class="modal-ok" onclick="doReset()">リセットする</button>
@@ -90,26 +87,28 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+const WIN_PENALTY = 100;
+
 const players = [
-  {id:'danto',    name:'だんと',    penalty:200,  av:'だ', bg:'#E1F5EE', fg:'#0F6E56'},
-  {id:'yuuma',    name:'ゆうま',    penalty:500,  av:'ゆ', bg:'#FBEAF0', fg:'#993556'},
-  {id:'tama',     name:'たまちゃん',penalty:500,  av:'た', bg:'#E6F1FB', fg:'#185FA5'},
-  {id:'naoki',    name:'なおき',    penalty:200,  av:'な', bg:'#EEEDFE', fg:'#534AB7'},
-  {id:'yuugo',    name:'ゆうご',    penalty:200,  av:'ゆ', bg:'#FAEEDA', fg:'#854F0B'},
-  {id:'toshiki',  name:'としき',    penalty:2000, av:'と', bg:'#EAF3DE', fg:'#3B6D11'},
-  {id:'haakun',   name:'はーくん',  penalty:1500, av:'は', bg:'#FCEBEB', fg:'#A32D2D'},
+  {id:'danto',   name:'だんと',    penalty:200,  av:'だ', bg:'#E1F5EE', fg:'#0F6E56'},
+  {id:'yuuma',   name:'ゆうま',    penalty:500,  av:'ゆ', bg:'#FBEAF0', fg:'#993556'},
+  {id:'tama',    name:'たまちゃん',penalty:500,  av:'た', bg:'#E6F1FB', fg:'#185FA5'},
+  {id:'naoki',   name:'なおき',    penalty:200,  av:'な', bg:'#EEEDFE', fg:'#534AB7'},
+  {id:'yuugo',   name:'ゆうご',    penalty:200,  av:'ゆ', bg:'#FAEEDA', fg:'#854F0B'},
+  {id:'toshiki', name:'としき',    penalty:2000, av:'と', bg:'#EAF3DE', fg:'#3B6D11'},
+  {id:'haakun',  name:'はーくん',  penalty:1500, av:'は', bg:'#FCEBEB', fg:'#A32D2D'},
 ];
 
 const fmt = n => '¥' + n.toLocaleString();
 
 let state = {};
-players.forEach(p => { state[p.id] = {wins:0, losses:0}; });
+players.forEach(p => { state[p.id] = {wins:0, losses:0, total:0}; });
 
 onValue(ref(db, 'state'), snapshot => {
   const data = snapshot.val();
   if(data){
     players.forEach(p => {
-      state[p.id] = data[p.id] || {wins:0, losses:0};
+      state[p.id] = data[p.id] || {wins:0, losses:0, total:0};
     });
   }
   document.getElementById('status').textContent = '同期済み';
@@ -118,17 +117,26 @@ onValue(ref(db, 'state'), snapshot => {
 
 function addWin(id){
   const s = state[id];
-  update(ref(db, 'state/' + id), {wins: (s.wins||0) + 1, losses: s.losses||0});
+  update(ref(db, 'state/' + id), {
+    wins: (s.wins||0) + 1,
+    losses: s.losses||0,
+    total: (s.total||0) + WIN_PENALTY
+  });
 }
 
 function addLoss(id){
+  const p = players.find(p => p.id === id);
   const s = state[id];
-  update(ref(db, 'state/' + id), {wins: s.wins||0, losses: (s.losses||0) + 1});
+  update(ref(db, 'state/' + id), {
+    wins: s.wins||0,
+    losses: (s.losses||0) + 1,
+    total: (s.total||0) + p.penalty
+  });
 }
 
 window.doReset = function(){
   const resetData = {};
-  players.forEach(p => { resetData[p.id] = {wins:0, losses:0}; });
+  players.forEach(p => { resetData[p.id] = {wins:0, losses:0, total:0}; });
   set(ref(db, 'state'), resetData);
   document.getElementById('overlay').classList.remove('show');
 };
@@ -137,21 +145,21 @@ function render(){
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
   players.forEach(p => {
-    const s = state[p.id] || {wins:0, losses:0};
-    const total = (s.losses||0) * p.penalty;
+    const s = state[p.id] || {wins:0, losses:0, total:0};
+    const total = s.total || 0;
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
       <div class="pname"><div class="av" style="background:${p.bg};color:${p.fg}">${p.av}</div>${p.name}</div>
       <div class="row"><span>勝ち</span><span><span class="badge bwin">${s.wins||0}勝</span></span></div>
       <div class="row"><span>負け</span><span><span class="badge bloss">${s.losses||0}敗</span></span></div>
-      <div class="row"><span>罰金/回</span><span>${fmt(p.penalty)}</span></div>
+      <div class="row"><span>勝ち-100 / 負け-${fmt(p.penalty)}</span></div>
       <div class="btns">
         <button class="bw" onclick="addWin('${p.id}')">＋ 勝ち</button>
         <button class="bl" onclick="addLoss('${p.id}')">－ 負け</button>
       </div>
-      <div class="tlabel">負け合計</div>
-      <div class="tamount ${total>0?'red':'muted'}">${fmt(total)}</div>
+      <div class="tlabel">合計支払い</div>
+      <div class="tamount" style="color:${total>0?'#993C1D':'#aaa'}">-${fmt(total)}</div>
     `;
     grid.appendChild(card);
   });
@@ -160,15 +168,15 @@ function render(){
   rows.innerHTML = '';
   let grand = 0;
   players.forEach(p => {
-    const s = state[p.id] || {wins:0, losses:0};
-    const total = (s.losses||0) * p.penalty;
+    const s = state[p.id] || {total:0};
+    const total = s.total || 0;
     grand += total;
     const row = document.createElement('div');
     row.className = 'srow';
-    row.innerHTML = `<span>${p.name}</span><span style="font-weight:500;${total>0?'color:#993C1D':''}">${fmt(total)}</span>`;
+    row.innerHTML = `<span>${p.name}</span><span style="font-weight:500;color:${total>0?'#993C1D':'#aaa'}">-${fmt(total)}</span>`;
     rows.appendChild(row);
   });
-  document.getElementById('grand-total').textContent = fmt(grand);
+  document.getElementById('grand-total').textContent = '-' + fmt(grand);
 }
 
 window.addWin = addWin;
