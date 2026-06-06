@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ゲーム戦績トラッカー</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:sans-serif;background:#f5f5f5;padding:1rem;}
+h2{font-size:18px;font-weight:500;margin-bottom:1.25rem;}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
+.top-bar span{font-size:13px;color:#888;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem;}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:12px 14px;}
+.pname{font-size:14px;font-weight:500;color:#111;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;}
+.row{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px;}
+.row span:last-child{font-weight:500;color:#111;}
+.btns{display:flex;gap:6px;margin-top:10px;}
+.bw{flex:1;padding:6px 0;font-size:12px;background:#E1F5EE;color:#0F6E56;border:1px solid #5DCAA5;border-radius:8px;cursor:pointer;font-weight:500;}
+.bl{flex:1;padding:6px 0;font-size:12px;background:#FAECE7;color:#993C1D;border:1px solid #F0997B;border-radius:8px;cursor:pointer;font-weight:500;}
+.tlabel{font-size:11px;color:#888;margin-top:7px;text-align:center;}
+.tamount{font-size:15px;font-weight:500;text-align:center;margin-top:2px;}
+.red{color:#993C1D;}
+.muted{color:#aaa;}
+.badge{display:inline-flex;align-items:center;font-size:11px;padding:2px 7px;border-radius:20px;}
+.bwin{background:#E1F5EE;color:#0F6E56;}
+.bloss{background:#FAECE7;color:#993C1D;}
+.summary{background:#f0f0f0;border-radius:12px;padding:14px 16px;margin-bottom:1.25rem;}
+.stitle{font-size:13px;color:#888;margin-bottom:10px;}
+.srow{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#111;margin-bottom:5px;}
+.divider{border:none;border-top:1px solid #ddd;margin:8px 0;}
+.trow{display:flex;justify-content:space-between;font-size:15px;font-weight:500;color:#111;}
+.btn-reset-all{width:100%;padding:10px;font-size:14px;background:#FAECE7;border:1px solid #F0997B;border-radius:8px;cursor:pointer;color:#993C1D;font-weight:500;}
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.35);align-items:center;justify-content:center;z-index:10;}
+.overlay.show{display:flex;}
+.modal{background:#fff;border:1px solid #ddd;border-radius:12px;padding:20px 24px;max-width:280px;text-align:center;}
+.modal p{font-size:14px;color:#111;margin-bottom:16px;line-height:1.6;}
+.modal-btns{display:flex;gap:8px;}
+.modal-btns button{flex:1;padding:8px;font-size:14px;border-radius:8px;cursor:pointer;font-weight:500;}
+.modal-cancel{background:#f0f0f0;border:1px solid #ddd;color:#111;}
+.modal-ok{background:#FAECE7;border:1px solid #F0997B;color:#993C1D;}
+.status{font-size:12px;color:#888;text-align:center;margin-bottom:8px;}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h2>ゲーム戦績トラッカー</h2>
+  <span id="status">接続中...</span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="summary">
+  <div class="stitle">負け合計まとめ</div>
+  <div id="summary-rows"></div>
+  <hr class="divider">
+  <div class="trow"><span>総合計</span><span id="grand-total">¥0</span></div>
+</div>
+
+<button class="btn-reset-all" onclick="document.getElementById('overlay').classList.add('show')">
+  全リセット
+</button>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <p>全員の勝ち・負け・合計を<br>リセットします。よろしいですか？</p>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="document.getElementById('overlay').classList.remove('show')">キャンセル</button>
+      <button class="modal-ok" onclick="doReset()">リセットする</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getDatabase, ref, update, onValue, set } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBCn5dYmYwyhww9lTjpdvhgNgKg-Vj4iM8",
+  authDomain: "gamblingvalorant-6aae8.firebaseapp.com",
+  databaseURL: "https://gamblingvalorant-6aae8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "gamblingvalorant-6aae8",
+  storageBucket: "gamblingvalorant-6aae8.firebasestorage.app",
+  messagingSenderId: "209398553756",
+  appId: "1:209398553756:web:fe514385eb87c31986e159"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const players = [
+  {id:'danto',    name:'だんと',    penalty:200,  av:'だ', bg:'#E1F5EE', fg:'#0F6E56'},
+  {id:'yuuma',    name:'ゆうま',    penalty:500,  av:'ゆ', bg:'#FBEAF0', fg:'#993556'},
+  {id:'tama',     name:'たまちゃん',penalty:500,  av:'た', bg:'#E6F1FB', fg:'#185FA5'},
+  {id:'naoki',    name:'なおき',    penalty:200,  av:'な', bg:'#EEEDFE', fg:'#534AB7'},
+  {id:'yuugo',    name:'ゆうご',    penalty:200,  av:'ゆ', bg:'#FAEEDA', fg:'#854F0B'},
+  {id:'toshiki',  name:'としき',    penalty:2000, av:'と', bg:'#EAF3DE', fg:'#3B6D11'},
+  {id:'haakun',   name:'はーくん',  penalty:1500, av:'は', bg:'#FCEBEB', fg:'#A32D2D'},
+];
+
+const fmt = n => '¥' + n.toLocaleString();
+
+let state = {};
+players.forEach(p => { state[p.id] = {wins:0, losses:0}; });
+
+onValue(ref(db, 'state'), snapshot => {
+  const data = snapshot.val();
+  if(data){
+    players.forEach(p => {
+      state[p.id] = data[p.id] || {wins:0, losses:0};
+    });
+  }
+  document.getElementById('status').textContent = '同期済み';
+  render();
+});
+
+function addWin(id){
+  const s = state[id];
+  update(ref(db, 'state/' + id), {wins: (s.wins||0) + 1, losses: s.losses||0});
+}
+
+function addLoss(id){
+  const s = state[id];
+  update(ref(db, 'state/' + id), {wins: s.wins||0, losses: (s.losses||0) + 1});
+}
+
+window.doReset = function(){
+  const resetData = {};
+  players.forEach(p => { resetData[p.id] = {wins:0, losses:0}; });
+  set(ref(db, 'state'), resetData);
+  document.getElementById('overlay').classList.remove('show');
+};
+
+function render(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  players.forEach(p => {
+    const s = state[p.id] || {wins:0, losses:0};
+    const total = (s.losses||0) * p.penalty;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="pname"><div class="av" style="background:${p.bg};color:${p.fg}">${p.av}</div>${p.name}</div>
+      <div class="row"><span>勝ち</span><span><span class="badge bwin">${s.wins||0}勝</span></span></div>
+      <div class="row"><span>負け</span><span><span class="badge bloss">${s.losses||0}敗</span></span></div>
+      <div class="row"><span>罰金/回</span><span>${fmt(p.penalty)}</span></div>
+      <div class="btns">
+        <button class="bw" onclick="addWin('${p.id}')">＋ 勝ち</button>
+        <button class="bl" onclick="addLoss('${p.id}')">－ 負け</button>
+      </div>
+      <div class="tlabel">負け合計</div>
+      <div class="tamount ${total>0?'red':'muted'}">${fmt(total)}</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  const rows = document.getElementById('summary-rows');
+  rows.innerHTML = '';
+  let grand = 0;
+  players.forEach(p => {
+    const s = state[p.id] || {wins:0, losses:0};
+    const total = (s.losses||0) * p.penalty;
+    grand += total;
+    const row = document.createElement('div');
+    row.className = 'srow';
+    row.innerHTML = `<span>${p.name}</span><span style="font-weight:500;${total>0?'color:#993C1D':''}">${fmt(total)}</span>`;
+    rows.appendChild(row);
+  });
+  document.getElementById('grand-total').textContent = fmt(grand);
+}
+
+window.addWin = addWin;
+window.addLoss = addLoss;
+
+render();
+</script>
+</body>
+</html>
