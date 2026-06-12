@@ -29,7 +29,10 @@ body{font-family:sans-serif;background:#f5f5f5;padding:1rem;}
 .srow{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#111;margin-bottom:5px;}
 .divider{border:none;border-top:1px solid #ddd;margin:8px 0;}
 .trow{display:flex;justify-content:space-between;font-size:15px;font-weight:500;color:#111;}
-.btn-reset-all{width:100%;padding:10px;font-size:14px;background:#FAECE7;border:1px solid #F0997B;border-radius:8px;cursor:pointer;color:#993C1D;font-weight:500;}
+.action-bar{display:flex;gap:8px;margin-bottom:8px;}
+.btn-undo{flex:1;padding:10px;font-size:14px;background:#fff;border:1px solid #ddd;border-radius:8px;cursor:pointer;color:#555;font-weight:500;}
+.btn-undo:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-reset-all{flex:1;padding:10px;font-size:14px;background:#FAECE7;border:1px solid #F0997B;border-radius:8px;cursor:pointer;color:#993C1D;font-weight:500;}
 .overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.35);align-items:center;justify-content:center;z-index:10;}
 .overlay.show{display:flex;}
 .modal{background:#fff;border:1px solid #ddd;border-radius:12px;padding:20px 24px;max-width:280px;text-align:center;}
@@ -56,9 +59,10 @@ body{font-family:sans-serif;background:#f5f5f5;padding:1rem;}
   <div class="trow"><span>総合計</span><span id="grand-total">¥0</span></div>
 </div>
 
-<button class="btn-reset-all" onclick="document.getElementById('overlay').classList.add('show')">
-  全リセット
-</button>
+<div class="action-bar">
+  <button class="btn-undo" id="undo-btn" onclick="doUndo()" disabled>↩ 戻る</button>
+  <button class="btn-reset-all" onclick="document.getElementById('overlay').classList.add('show')">全リセット</button>
+</div>
 
 <div class="overlay" id="overlay">
   <div class="modal">
@@ -100,6 +104,7 @@ const players = [
 const fmt = n => '¥' + n.toLocaleString();
 
 let state = {};
+let history = [];
 players.forEach(p => { state[p.id] = {wins:0, losses:0, total:0}; });
 
 onValue(ref(db, 'state'), snapshot => {
@@ -113,7 +118,14 @@ onValue(ref(db, 'state'), snapshot => {
   render();
 });
 
+function saveHistory(){
+  history.push(JSON.parse(JSON.stringify(state)));
+  if(history.length > 20) history.shift();
+  document.getElementById('undo-btn').disabled = false;
+}
+
 function addWin(id){
+  saveHistory();
   const p = players.find(p => p.id === id);
   const s = state[id];
   update(ref(db, 'state/' + id), {
@@ -124,6 +136,7 @@ function addWin(id){
 }
 
 function addLoss(id){
+  saveHistory();
   const p = players.find(p => p.id === id);
   const s = state[id];
   update(ref(db, 'state/' + id), {
@@ -133,7 +146,15 @@ function addLoss(id){
   });
 }
 
+window.doUndo = function(){
+  if(history.length === 0) return;
+  const prev = history.pop();
+  set(ref(db, 'state'), prev);
+  if(history.length === 0) document.getElementById('undo-btn').disabled = true;
+};
+
 window.doReset = function(){
+  saveHistory();
   const resetData = {};
   players.forEach(p => { resetData[p.id] = {wins:0, losses:0, total:0}; });
   set(ref(db, 'state'), resetData);
